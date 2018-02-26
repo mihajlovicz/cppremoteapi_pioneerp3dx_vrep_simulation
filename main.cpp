@@ -58,13 +58,11 @@ int main(int argc, char **argv)
 	int kinectSensorHandle;
 
 	float* depthBuffer;//float** depthBuffer  // = float[64][48];// [3072];
-	//float depthBuffer_a[64][48];//[64][48];
-	//float(**depthBuffer) = &depthBuffer_a;
-	//int* resolution; // [64 x 48] ????
+	
 	int resolution[] = { 64,48 };
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
 	std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> ciljevi;
-	std::vector<Eigen::Vector3f> centri_mase_ciljeva; //ubaciti prvo sopstvenu lokaciju ???
+	std::vector<Eigen::Vector3f> centri_mase_ciljeva; //ubaciti prvo sopstvenu lokaciju
 	RVO::RVOSimulator* sim = new RVO::RVOSimulator();
 
 	float xAngle;
@@ -78,18 +76,9 @@ int main(int argc, char **argv)
 	float nearClippingPlane = 1;
 	float depthAmplitude = 1;
 
-	// variaveis de cena e movimentação do pioneer
-	/*float noDetectionDist = 0.5;
-	float maxDetectionDist = 0.2;
-	float detect[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
-	float braitenbergL[16] = { -0.2,-0.4,-0.6,-0.8,-1,-1.2,-1.4,-1.6, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0 };
-	float braitenbergR[16] = { -1.6,-1.4,-1.2,-1,-0.8,-0.6,-0.4,-0.2, 0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0 };
-	*/
+	
 	float v0 = 0;
 
-
-	// pcl::PointCloud<pcl::PointXYZ> cloud;//radi
-	// cloud.points.size();  //radi
 
 	int clientID = simxStart((simxChar*)serverIP.c_str(), serverPort, true, true, 2000, 5);
 
@@ -99,18 +88,16 @@ int main(int argc, char **argv)
 
 		if (simxGetObjectHandle(clientID, (const simxChar*) "kinect_visionSensor", (simxInt *)&kinectSensorHandle, (simxInt)simx_opmode_oneshot_wait) == simx_return_ok)
 		{
-			//depthBuffer = simxGetVisionSensorDepthBuffer(kinectSensorHandle);  //dodati simReleaseBuffer ???
-
-			// dodati simHandleVisionSensor ???
+			//depthBuffer = simxGetVisionSensorDepthBuffer(kinectSensorHandle);  //dodati simReleaseBuffer 
+			// dodati simHandleVisionSensor 
 			int res = simxGetVisionSensorDepthBuffer(clientID, kinectSensorHandle, resolution, &depthBuffer, simx_opmode_streaming); //simx_return_ok
 
 			if (simxGetVisionSensorDepthBuffer(clientID, kinectSensorHandle, resolution, &depthBuffer, simx_opmode_buffer) == simx_error_noerror)
 			  {			
-				for (int i = 0; i < resolution[0]; i++) {    // da li i ide od 0 do 63 ili od 1 do 64???
+				for (int i = 0; i < resolution[0]; i++) {   
 					xAngle = ((32 - i - 0.5) / 32)*camXHalfAngle;
 					for (int j = 0; j < resolution[0]; j++) {
 						yAngle = ((j - 24 + 0.5) / 24)*camYHalfAngle;
-						//depthValue = depthBuffer[i][j];// +(j - 1) * 64] //[i + (j - 1) * 63]?????? //depthBuffer[i + (j - 1) * 64]
 						depthValue = depthBuffer[i*resolution[0] + j];
 						zCoord = nearClippingPlane + depthAmplitude*depthValue;
 						xCoord = tan(xAngle)*zCoord;
@@ -126,113 +113,57 @@ int main(int argc, char **argv)
 
 		std::vector<std::future<Eigen::Vector3f>> results;
 
-		// poseban thread za centar_mase_prepreke(elem)??? mozda packaged task
+		// poseban thread za centar_mase_prepreke(elem), packaged task
 		for (const auto& elem : ciljevi) {
 			results.push_back(std::async(&centar_mase_prepreke, elem));
 		}
-		
-		//for (const auto& elem : results) {
-		//	 // Boost::wait_for_any() get future result as they finish
-		//	//centri_mase_ciljeva.push_back(elem.get()); // kompajler prijavljuje neku gresku ???
-		//}
-		
 
-		// Boost::wait_for_any() get future result as they finish  // doraditi !!!
+
+		// Boost::wait_for_any() get future result as they finish  // doraditi 
 		std::vector<std::future<Eigen::Vector3f>>::iterator iter;
 		for (iter = results.begin(); iter != results.end(); ++iter) {
 			centri_mase_ciljeva.push_back((*iter).get());
 		}
 
 
-		// inicialização dos motores
 		if (simxGetObjectHandle(clientID, (const simxChar*) "Pioneer_p3dx_leftMotor", (simxInt *)&leftMotorHandle, (simxInt)simx_opmode_oneshot_wait) != simx_return_ok)
-			cout << "Handle do motor esquerdo nao encontrado!" << std::endl;
+			cout << "left engine handle not found!" << std::endl;
 		else
-			cout << "Conectado ao motor esquerdo!" << std::endl;
+			cout << "Connected to left motor!" << std::endl;
 
 		if (simxGetObjectHandle(clientID, (const simxChar*) "Pioneer_p3dx_rightMotor", (simxInt *)&rightMotorHandle, (simxInt)simx_opmode_oneshot_wait) != simx_return_ok)
-			cout << "Handle do motor direito nao encontrado!" << std::endl;
+			cout << "Right hand motor not found!" << std::endl;
 		else
-			cout << "Conectado ao motor direito!" << std::endl;
+			cout << "Connected to right motor!" << std::endl;
 
-		//// inicialização dos sensores (remoteApi)
-		//for (int i = 0; i < 16; i++)
-		//{
-		//	sensorNome[i] = "Pioneer_p3dx_ultrasonicSensor" + to_string(i + 1);
-
-		//	if (simxGetObjectHandle(clientID, (const simxChar*)sensorNome[i].c_str(), (simxInt *)&sensorHandle[i], (simxInt)simx_opmode_oneshot_wait) != simx_return_ok)
-		//		cout << "Handle do sensor " << sensorNome[i] << " nao encontrado!" << std::endl;
-		//	else
-		//	{
-		//		cout << "Conectado ao sensor " << sensorNome[i] << std::endl;
-		//		simxReadProximitySensor(clientID, sensorHandle[i], NULL, NULL, NULL, NULL, simx_opmode_streaming);
-		//	}
-		//}
-
-		// desvio e velocidade do robô
-		while (simxGetConnectionId(clientID) != -1) // enquanto a simulação estiver ativa
+		while (simxGetConnectionId(clientID) != -1) 
 		{
-			/*for (int i = 0; i < 16; i++)
-			{
-				simxUChar state;
-				simxFloat coord[3];
-
-				if (simxReadProximitySensor(clientID, sensorHandle[i], &state, coord, NULL, NULL, simx_opmode_buffer) == simx_return_ok)
-				{
-					float dist = coord[2];
-					if (state > 0 && (dist < noDetectionDist))
-					{
-						if (dist < maxDetectionDist)
-						{
-							dist = maxDetectionDist;
-						}
-
-						detect[i] = 1 - ((dist - maxDetectionDist) / (noDetectionDist - maxDetectionDist));
-					}
-					else
-						detect[i] = 0;
-				}
-				else
-					detect[i] = 0;
-			}*/
-
 
 			vLeft = v0;
 			vRight = v0;
 
-			//sim->setTimeStep(0.25f); ??? da li je potrebno
+			//sim->setTimeStep(0.25f); 
 
 			for(const auto& cilj : centri_mase_ciljeva){
 				sim->addAgent(RVO::Vector3(cilj[0], cilj[1], cilj[2]));
 			}
 
 			RVO::Vector3 zeljena_brz = sim->getAgentPrefVelocity(0);
-			//sim->doStep(); ??? da li je potrebno
+			//sim->doStep();
 
 			std::tuple<float, float> vright_vleft = brzine_tockova(zeljena_brz);
 
 
-			/*for (int i = 0; i < 16; i++)
-			{
-				vLeft = vLeft + braitenbergL[i] * detect[i];
-				vRight = vRight + braitenbergR[i] * detect[i];
-			}*/
-
-			// atualiza velocidades dos motores
-
-			//simxSetJointTargetVelocity(clientID, leftMotorHandle, (simxFloat)std::get<0>(vright_vleft), simx_opmode_streaming);
-			//simxSetJointTargetVelocity(clientID, rightMotorHandle, (simxFloat)std::get<1>(vright_vleft), simx_opmode_streaming);
 			simxSetJointTargetVelocity(clientID, leftMotorHandle, (simxFloat)vLeft, simx_opmode_streaming);
 			simxSetJointTargetVelocity(clientID, rightMotorHandle, (simxFloat)vRight, simx_opmode_streaming);
 
-			// espera um pouco antes de reiniciar a leitura dos sensores
 			extApi_sleepMs(5);
 		}
 
-		simxFinish(clientID); // fechando conexao com o servidor
-		cout << "Conexao fechada!" << std::endl;
+		simxFinish(clientID); 
+		cout << "Closed connection!" << std::endl;
 	}
 	else
-		cout << "Problemas para conectar o servidor!" << std::endl;
+		cout << "Problems connecting or server!" << std::endl;
 	return 0;
 }
